@@ -1,0 +1,7 @@
+node_modules
+dist
+.vercel
+.env*
+.e2e
+*.xlsx
+*.xlsm
