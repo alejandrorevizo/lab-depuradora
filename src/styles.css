@@ -756,6 +756,15 @@ body.present .kpi-value b { font-size: 38px; }
 body.present .page-head h2 { font-size: 28px; }
 body.present .card-tools { display: none; }
 
+/* Cabecera en dos filas cuando las pestañas no caben junto al logo y los botones
+   (la clase .stack la pone fitHeader() en main.js midiendo el espacio real). */
+.app-header.stack { flex-wrap: wrap; row-gap: 6px; }
+.app-header.stack .header-actions,
+.app-header.stack:has(.tabs:not(.hidden)) .header-actions { order: 2; margin-left: auto; }
+.app-header.stack .tabs { order: 3; flex: 1 1 100%; margin: 0; overflow-x: auto; scrollbar-width: none; border-radius: 12px; }
+.app-header.stack .tabs::-webkit-scrollbar { display: none; }
+.app-header.stack .more-menu { position: fixed; right: 12px; top: auto; }
+
 /* ---------- Móvil ---------- */
 @media (max-width: 1280px) {
   .app-header { flex-wrap: wrap; row-gap: 6px; }

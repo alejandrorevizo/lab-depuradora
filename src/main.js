@@ -319,6 +319,30 @@ function renderTabs() {
   const more = nav.querySelector('.more');
   const mb = more.querySelector('.more-btn');
   mb.onclick = (e) => { e.stopPropagation(); const o = more.classList.toggle('open'); mb.setAttribute('aria-expanded', String(o)); };
+  fitHeader();
+}
+
+// Si las pestañas no caben en la misma fila que el logo y los botones, pasan a una
+// segunda fila (clase .stack). Se mide el espacio real, así funciona con cualquier
+// número de pestañas, botones visibles (p. ej. "Accesos" para admin) o tamaño de letra.
+function fitHeader() {
+  const header = document.querySelector('.app-header');
+  const nav = $('#tabs');
+  if (!header || !nav) return;
+  header.classList.remove('stack');
+  if (nav.classList.contains('hidden')) return;
+  const actions = header.querySelector('.header-actions');
+  const overflow = nav.scrollWidth > nav.clientWidth + 1
+    || (actions && nav.getBoundingClientRect().right > actions.getBoundingClientRect().left + 1)
+    || header.scrollWidth > header.clientWidth + 1;
+  header.classList.toggle('stack', overflow);
+}
+window.addEventListener('resize', fitHeader);
+document.fonts?.ready.then(fitHeader);
+if (window.ResizeObserver) {
+  const ro = new ResizeObserver(() => fitHeader());
+  const acts = document.querySelector('.header-actions');
+  if (acts) ro.observe(acts);
 }
 document.addEventListener('click', (e) => {
   const more = document.querySelector('#tabs .more');
