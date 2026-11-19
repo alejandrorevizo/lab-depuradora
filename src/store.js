@@ -7,8 +7,8 @@ export const state = {
   data: null,        // salida de parseWorkbook
   source: null,      // { mode: 'shared'|'session'|'history', fileName, uploadedAt, uploadedBy, pathname }
   storage: 'unknown',// 'blob' | 'none' | 'unknown'
-  tab: 'resumen',
-  filters: { from: null, to: null, preset: 'all', inst: [], point: [], param: [] },
+  tab: 'hoy',
+  filters: { from: null, to: null, preset: 'all', inst: [], point: [], param: [], agg: 'd' },
   sel: { date: null },
 };
 
@@ -143,6 +143,28 @@ export function seriesUnion(specs, opts = {}) {
     .map(([d, recs]) => ({ d, t: isoToMs(d), v: recs.reduce((a, r) => a + r.v, 0) / recs.length, n: recs.length, recs }));
 }
 
+/** Agrupa una serie diaria por semana (lunes) o mes con la media. 'd' la deja igual. */
+export function aggregate(s, agg = state.filters.agg) {
+  if (!agg || agg === 'd') return s;
+  const keyOf = (d) => {
+    if (agg === 'm') return d.slice(0, 8) + '01';
+    const [y, m, dd] = d.split('-').map(Number);
+    const dt = new Date(y, m - 1, dd);
+    return msToIsoLocal(dt.getTime() - ((dt.getDay() + 6) % 7) * 86400000);
+  };
+  const groups = new Map();
+  for (const x of s) {
+    const k = keyOf(x.d);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(x);
+  }
+  return [...groups.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([d, xs]) => {
+    const recs = xs.flatMap((x) => x.recs || []);
+    return { d, t: isoToMs(d), v: xs.reduce((a, x) => a + x.v, 0) / xs.length, n: xs.length, recs, agg };
+  });
+}
+const msToIsoLocal = (ms) => { const dt = new Date(ms); return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`; };
+
 export function unitOf(inst, param) {
   const c = sel().catalog[inst];
   return (c && c[param] && c[param].unit) || '';
@@ -162,6 +184,7 @@ export function toHash() {
   if (f.inst.length) p.set('inst', f.inst.join('|'));
   if (f.point.length) p.set('point', f.point.join('|'));
   if (f.param.length) p.set('param', f.param.join('|'));
+  if (f.agg && f.agg !== 'd') p.set('agg', f.agg);
   if (state.sel.date) p.set('d', state.sel.date);
   const q = p.toString();
   return `#${state.tab}${q ? '?' + q : ''}`;
@@ -175,5 +198,6 @@ export function fromHash(hash) {
   if (p.get('from')) { out.filters.from = p.get('from'); out.filters.preset = 'custom'; }
   if (p.get('to')) { out.filters.to = p.get('to'); out.filters.preset = 'custom'; }
   for (const k of ['inst', 'point', 'param']) out.filters[k] = p.get(k) ? p.get(k).split('|') : [];
+  if (['w', 'm'].includes(p.get('agg'))) out.filters.agg = p.get('agg');
   return out;
 }

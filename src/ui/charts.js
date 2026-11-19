@@ -77,6 +77,13 @@ export function makeChart(el) {
   ro && ro.observe(el);
   return c;
 }
+/** Libera los gráficos que haya dentro de un contenedor (al redibujar una parte de la página). */
+export function disposeIn(root) {
+  for (const c of [...live]) {
+    const dom = c.getDom();
+    if (root.contains(dom)) { try { ro && ro.unobserve(dom); c.dispose(); } catch (e) { /* */ } live.delete(c); }
+  }
+}
 export function disposeAll() {
   for (const c of live) { try { ro && ro.unobserve(c.getDom()); c.dispose(); } catch (e) { /* */ } }
   live.clear();
@@ -220,6 +227,7 @@ const ICONS = {
   png: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>',
   csv: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M12 18v-6M9 15l3 3 3-3"/></svg>',
   expand: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>',
+  info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>',
 };
 
 /**
@@ -233,6 +241,7 @@ export function card(opts) {
     <div class="card-head">
       <div><h3 class="card-title"></h3><p class="card-sub"></p></div>
       <div class="card-tools">
+        ${opts.info ? `<button class="btn ghost info-btn" data-t="info" title="Qué es, de dónde sale y cómo leerlo" aria-expanded="false">${ICONS.info}<span>¿Qué es?</span></button>` : ''}
         ${opts.tools === false ? '' : `
         <button class="btn ghost icon" data-t="table" title="Ver datos" aria-label="Ver datos">${ICONS.table}</button>
         ${opts.chart === false ? '' : `<button class="btn ghost icon" data-t="png" title="Exportar PNG" aria-label="Exportar PNG">${ICONS.png}</button>`}
@@ -240,6 +249,7 @@ export function card(opts) {
         ${opts.chart === false ? '' : `<button class="btn ghost icon" data-t="expand" title="Ampliar" aria-label="Ampliar">${ICONS.expand}</button>`}`}
       </div>
     </div>
+    ${opts.info ? `<div class="card-info hidden">${opts.info}</div>` : ''}
     ${opts.controls != null ? `<div class="card-controls">${opts.controls}</div>` : ''}
     <div class="card-body">${opts.chart === false ? '' : `<div class="chart ${opts.height || ''}"></div>`}</div>
     <div class="card-foot hidden"></div>`;
@@ -253,6 +263,7 @@ export function card(opts) {
     setTitle(t, s) { el.querySelector('.card-title').textContent = t; el.querySelector('.card-sub').textContent = s || ''; },
     setRows(columns, rows) { api.columns = columns; api.rows = rows; },
     setFoot(html) { const f = el.querySelector('.card-foot'); f.innerHTML = html || ''; f.classList.toggle('hidden', !html); },
+    setInfo(html) { const i = el.querySelector('.card-info'); if (i) i.innerHTML = html; },
   };
   api.setTitle(opts.title, opts.sub);
   if (api.chartEl) {
@@ -280,6 +291,7 @@ export function card(opts) {
     const b = e.target.closest('button');
     if (!b) return;
     const title = el.querySelector('.card-title').textContent;
+    if (b.dataset.t === 'info') { const open = el.querySelector('.card-info').classList.toggle('hidden') === false; b.setAttribute('aria-expanded', String(open)); b.classList.toggle('on', open); }
     if (b.dataset.t === 'table') openTable(title, api.columns, api.rows);
     if (b.dataset.t === 'csv') downloadCSV(slug(title), api.columns, api.rows);
     if (b.dataset.t === 'png' && api.chart) exportPNG(api.chart, slug(title));

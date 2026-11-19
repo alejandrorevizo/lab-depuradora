@@ -14,10 +14,13 @@
     "@vercel/blob": "^2.0.0",
     "@vercel/functions": "^3.0.0",
     "echarts": "^6.0.0",
+    "hls.js": "^1.6.15",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "vite": "^7.0.0"
   },
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  }
 }

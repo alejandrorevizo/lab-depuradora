@@ -3,6 +3,7 @@
   "framework": "vite",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "crons": [{ "path": "/api/sync", "schedule": "0 5 * * *" }],
   "headers": [
     {
       "source": "/(.*)",

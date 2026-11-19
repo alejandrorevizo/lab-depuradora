@@ -1,12 +1,21 @@
 // Utilidades compartidas por las funciones /api.
 import { sessionFrom, env } from '../lib/auth.js';
+import { roleOf } from '../lib/users.js';
 
 export const json = (data, status = 200, headers = {}) =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...headers } });
 
+/** Sesión válida y cuenta aún aprobada (si el administrador retira el acceso, deja de valer al momento). */
 export async function requireSession(request) {
   const s = await sessionFrom(request);
-  return s || null;
+  if (!s) return null;
+  const role = await roleOf(s);
+  return role ? { ...s, role } : null;
+}
+/** Solo administrador o editores: publicar Excel y editar límites. */
+export async function requireEditor(request) {
+  const s = await requireSession(request);
+  return s && (s.role === 'admin' || s.role === 'editor') ? s : null;
 }
 
 export const blobConfigured = () => !!(env('BLOB_READ_WRITE_TOKEN') || env('BLOB_STORE_ID'));

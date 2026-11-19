@@ -6,12 +6,16 @@
   <meta name="robots" content="noindex, nofollow" />
   <title>Laboratorio depuradora · Revizo</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
   <script>
     // Tema guardado antes de pintar, para evitar parpadeo.
     try { const t = localStorage.getItem('revizo-lab-theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
   </script>
 </head>
 <body>
+  <div class="topbar">
   <header class="app-header">
     <div class="brand">
       <img class="brand-logo light" src="/logo-revizo-crop.jpg" alt="Revizo · Instalaciones y mantenimiento" width="385" height="144" />
@@ -26,6 +30,17 @@
       <button class="btn primary" id="btn-upload" title="Subir un Excel nuevo">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M6 10l6-6 6 6M4 20h16"/></svg>
         <span class="lbl">Subir Excel</span>
+      </button>
+      <button class="btn ghost" id="btn-help" title="Cómo funciona el panel y de dónde salen los datos">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01"/></svg>
+        <span class="lbl">Ayuda</span>
+      </button>
+      <button class="btn ghost icon hidden" id="btn-sync" title="Actualizar ahora desde la nube" aria-label="Actualizar desde la nube">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5M3 21v-5h5"/></svg>
+      </button>
+      <button class="btn ghost hidden" id="btn-access" title="Solicitudes y usuarios con acceso">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>
+        <span class="lbl">Accesos</span><span class="badge hidden" id="access-badge"></span>
       </button>
       <button class="btn ghost icon" id="btn-history" title="Versiones anteriores del Excel" aria-label="Versiones anteriores">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg>
@@ -46,10 +61,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
       </button>
     </div>
+    <nav class="tabs hidden" id="tabs" role="tablist" aria-label="Páginas del dashboard"></nav>
   </header>
-
   <div class="filterbar hidden" id="filterbar"></div>
-  <nav class="tabs hidden" id="tabs" role="tablist" aria-label="Páginas del dashboard"></nav>
+  </div>
   <main id="main">
     <div class="empty"><div class="spinner"></div><p class="muted">Cargando datos…</p></div>
   </main>

@@ -73,9 +73,9 @@ const EDARI_EXPECTED = [
   ['B', 'Agua sin tratar', 'm3/día'], ['C', 'Rendimiento depuradora', 'Permeado (m3/día)'], ['D', 'Efectividad', '% de depuración'],
   ['E', 'DQO (mg/L)', 'Entrada'], ['F', 'DQO (mg/L)', 'Homo'], ['G', 'DQO (mg/L)', 'DAF'], ['H', 'DQO (mg/L)', 'Permeado'],
   ['I', 'DQO (mg/L)', 'Balsa N'], ['J', 'DQO (mg/L)', 'Chulives'], ['K', 'DQO (mg/L)', 'Tanque gris'],
-  ['L', 'pH', 'Entrada'], ['O', 'pH', 'Permeado'], ['T', 'Temperatura', 'Entrada'], ['AB', 'Conductividad (μS/cm)', 'Entrada'],
-  ['AJ', 'SST (mg/L)', 'Entrada'], ['AN', 'SST (mg/L)', 'Bio 2 (1:10)'], ['AO', 'SST (mg/L)', 'Bio 2'],
-  ['AS', 'Amonio', 'DAF'], ['AU', 'Fósforo total', 'DAF'], ['AW', 'Observaciones', ''],
+  ['L', 'pH', 'Entrada'], ['O', 'pH', 'Permeado'], ['V', 'Temperatura', 'Entrada'], ['AF', 'Conductividad (μS/cm)', 'Entrada'],
+  ['AN', 'SST (mg/L)', 'Entrada'], ['AR', 'SST (mg/L)', 'Bio 2 (1:10)'], ['AS', 'SST (mg/L)', 'Bio 2'],
+  ['AY', 'Amonio', 'DAF'], ['BA', 'Fósforo total', 'DAF'], ['BC', 'Observaciones', ''],
 ];
 
 function parseEDARI(ctx, ws) {
@@ -420,8 +420,8 @@ function parseTorres(ctx, ws) {
 // ---------------------------------------------------------------------------
 const EQUIP = ['caldera 1', 'caldera 2', 'condensada 1', 'condensada 2', 'condensado 1', 'condensado 2', 'descalcificador'];
 
-function parseCalderas(ctx, ws) {
-  const name = 'CALDERAS Y TORRES';
+// name: la hoja original o las que se añadan después con el mismo formato (p. ej. «INFORME CALDERAS Y TORRES», desde el 29/10/2026).
+function parseCalderas(ctx, ws, name = 'CALDERAS Y TORRES') {
   const S = ctx.sheet(name);
   const { maxR, maxC } = sheetBounds(ws);
   let cur = null;
@@ -431,9 +431,11 @@ function parseCalderas(ctx, ws) {
   const addVal = (r, c, inst, point, cp) => {
     if (!cur) { undated.push(r + 1); return; }
     const cl = classifyAt(ws, r, c);
-    ctx.add({ d: cur, inst, point: tidy(point), param: cp.param, unit: cp.unit, v: cl.v, flag: cl.flag, raw: cl.raw, bound: cl.bound, sheet: name, cell: addr(r, c) });
-    if (cp.ref) ctx.tables.refRanges[`${inst}|${tidy(point)}|${cp.param}`] = cp.ref;
-    if (cl.flag === FLAG.TEXT) ctx.issue({ sheet: name, cell: addr(r, c), level: 'warn', type: 'text', msg: `${cp.param} ${tidy(point)} el ${fmt(cur)}: "${cl.raw}" no es un número válido (no se interpreta).`, raw: cl.raw });
+    // "Condensada N" (formato vertical) y "Condensado N" (formato informe) son el mismo equipo.
+    const pt = tidy(point).replace(/^Condensada(\s+\d)/i, 'Condensado$1');
+    ctx.add({ d: cur, inst, point: pt, param: cp.param, unit: cp.unit, v: cl.v, flag: cl.flag, raw: cl.raw, bound: cl.bound, sheet: name, cell: addr(r, c) });
+    if (cp.ref) ctx.tables.refRanges[`${inst}|${pt}|${cp.param}`] = cp.ref;
+    if (cl.flag === FLAG.TEXT) ctx.issue({ sheet: name, cell: addr(r, c), level: 'warn', type: 'text', msg: `${cp.param} ${pt} el ${fmt(cur)}: "${cl.raw}" no es un número válido (no se interpreta).`, raw: cl.raw });
   };
   const rowTexts = (r) => { const out = []; for (let c = 0; c <= maxC; c++) out.push(text(ws, r, c)); return out; };
   const nextNonEmpty = (r) => { for (let k = r + 1; k <= Math.min(maxR, r + 3); k++) if (rowTexts(k).some(Boolean)) return k; return -1; };
@@ -589,12 +591,15 @@ function parseFructalys(ctx, ws) {
   const name = 'FRUCTALYS';
   const S = ctx.sheet(name);
   const { maxR, maxC } = sheetBounds(ws);
-  let dateCol = -1;
+  let dateCol = -1, obsCol = -1;
   const cols = [];
   for (let c = 0; c <= maxC; c++) {
     const h = rawText(getCell(ws, 0, c));
     if (!h) continue;
     if (norm(h).startsWith('fecha')) { dateCol = c; continue; }
+    if (norm(h).startsWith('observacion')) { obsCol = c; continue; }
+    const tl = tempLabelUnit(h);
+    if (tl) { cols.push({ c, ...tl }); continue; }
     const sl = splitLabel(h);
     const unit = sl.unit || (sl.rest && /^(u|µ|μ)?s\/cm|mg\/l|ntu|ppm$/i.test(sl.rest) ? sl.rest : '');
     cols.push({ c, param: sl.main, unit });
@@ -611,6 +616,10 @@ function parseFructalys(ctx, ws) {
       ctx.add({ d, inst: INST.FRUCTALYS, point: 'Fructalys', param: col.param, unit: col.unit, v: cl.v, flag: cl.flag, raw: cl.raw, bound: cl.bound, sheet: name, cell: addr(r, col.c) });
       if (isValue(cl.flag)) any = true;
       if (cl.flag === FLAG.GT) ctx.issue({ sheet: name, cell: addr(r, col.c), type: 'gt', msg: `${col.param} el ${fmt(d)}: "${cl.raw}" (fuera de rango del método, sin valor numérico).`, raw: cl.raw });
+    }
+    if (obsCol >= 0) {
+      const t = text(ws, r, obsCol);
+      if (t) ctx.obs.push({ d, inst: INST.FRUCTALYS, text: t, sheet: name, cell: addr(r, obsCol), kind: 'Fructalys' });
     }
     if (!any) emptyDates.push(fmt(d));
   }
@@ -760,6 +769,12 @@ export function parseWorkbook(wb, { fileName = '' } = {}) {
   for (const exp of EXPECTED_SHEETS) {
     const real = findSheet(wb, exp);
     const S = ctx.sheet(exp);
+    if (!real && OMITTED[exp]) {
+      // Hoja que no se muestra por decisión del cliente: que falte no es un problema.
+      S.status = 'omitted';
+      S.notes.push(OMITTED[exp]);
+      continue;
+    }
     if (!real) {
       S.status = 'missing';
       ctx.issue({ sheet: exp, level: 'warn', type: 'missing', msg: `Falta la hoja "${exp}". El resto del dashboard sigue funcionando.` });
@@ -773,6 +788,17 @@ export function parseWorkbook(wb, { fileName = '' } = {}) {
     } catch (e) {
       S.status = 'error';
       ctx.issue({ sheet: exp, level: 'warn', type: 'error', msg: `Error al leer la hoja "${exp}": ${e.message}. Se continúa con el resto.` });
+    }
+  }
+  // Hojas nuevas de calderas con el mismo formato de informe diario (el laboratorio abre pestañas nuevas).
+  for (const s of wb.SheetNames) {
+    if (used.has(s) || !/caldera/.test(norm(s))) continue;
+    used.add(s);
+    try {
+      parseCalderas(ctx, wb.Sheets[s], s);
+    } catch (e) {
+      ctx.sheet(s).status = 'error';
+      ctx.issue({ sheet: s, level: 'warn', type: 'error', msg: `Error al leer la hoja "${s}": ${e.message}. Se continúa con el resto.` });
     }
   }
   for (const s of wb.SheetNames) {

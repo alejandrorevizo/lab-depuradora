@@ -40,6 +40,16 @@ Sin Blob configurado la web sigue funcionando, pero cada persona ve solo el Exce
 - Cada publicación se guarda con fecha. El botón de **historial** (reloj) permite abrir versiones anteriores.
 - No hay que tocar código para que aparezcan filas o fechas nuevas.
 
+### Actualización automática desde Google Drive u OneDrive
+
+Si `EXCEL_URL` tiene el enlace del Excel en Google Drive o en OneDrive, compartido como «Cualquier persona con el enlace» (también vale `ONEDRIVE_URL`, la variable antigua), `api/sync.js` lo descarga (`lib/source.js`: Google Drive, o `lib/onedrive.js`) y, si ha cambiado (huella SHA-256), lo publica como versión nueva:
+
+- al abrir el panel, en segundo plano, como mucho cada 10 minutos;
+- cada día a las 05:00 UTC con la tarea programada de Vercel (`vercel.json` → `crons`, protegida con `CRON_SECRET`);
+- con el botón ⟳ de la cabecera (administrador y editores).
+
+Se conservan las últimas 120 versiones. El estado de la última comprobación está en `config/sync.json` (Vercel Blob) y se ve al pasar el ratón por el nombre del archivo en la cabecera. Si se deja de compartir el archivo o se mueve, la comprobación da error y el panel sigue mostrando la última versión publicada.
+
 ## 3. Qué pasa si cambia el Excel
 
 - **Falta una hoja:** aviso arriba de cada página y en *Calidad de datos*. El resto funciona igual.
@@ -93,17 +103,21 @@ Hoja por hoja:
 
 ## 5. Páginas
 
+Pestañas principales (con un punto de color con el estado de cada área):
+
 | Página | Contenido |
 |---|---|
-| Resumen | Último día (efectividad y tren de DQO), 6 KPIs con variación frente al registro anterior y a la media de los 7 previos, sparklines, efectividad diaria, caudales y últimas observaciones |
-| Proceso DQO | Tren Entrada → Homo → DAF → Permeado para la fecha elegida, con % de eliminación entre etapas; evolución por punto (escala log/lineal) |
-| Efectividad | Serie con banda 90–98 % y semáforo (▼ por debajo, ● dentro, ▲ por encima), distribución y tabla |
-| Parámetros por punto | Mapa de calor fecha × punto y pequeños múltiplos para cualquier parámetro e instalación |
-| Biológico | SST licor mezcla con banda 8.000–12.000, O.D. B2 por turno, dosificación de urea |
-| Instalaciones | Torres, Calderas y glicol (con verificación de reactivos), Agua potable, Ósmosis O y P, Fructalys |
-| Análisis | Gráfico de control (media ± 2σ), dispersión con correlación y recta, comparación de dos periodos |
-| Bitácora | Línea de tiempo y buscador de observaciones, registro fotográfico, tabla puntual de Hoja2 |
-| Calidad de datos | Hojas leídas, días sin muestra por punto, valores ">", errores, negativos, descartes y avisos |
+| Planta hoy | Estado de las 4 áreas con sus indicadores clave, recuento fuera/cerca/en rango, tabla de alertas y últimas observaciones |
+| EDARI | KPIs, tren de DQO Entrada → Homo → DAF → Permeado, efectividad con banda, evolución por punto (chips de parámetro y punto), SST licor mezcla, O.D. B2 por turno, urea y observaciones |
+| Calderas y torres | Estado del día de cada caldera, condensado y descalcificador, y de cada torre (matriz con semáforo), ciclos de concentración (calculados), glicol, reactivos, tendencias y observaciones |
+| Fructalys | KPIs, DQO con los ">60000" dibujados en el techo del método, muestreo y carga, tendencias y observaciones |
+| Agua potable | Tarjeta por punto (entrada, tanque, salida) con cloro libre, total, combinado (calculado) y conductividad; evolución y registro diario |
+
+Menú "Más": Explorador por punto, Ósmosis, Análisis, Bitácora, Calidad de datos y **Guía y fuentes** (de dónde sale cada dato, tratamiento de celdas, hojas, límites y glosario). Cada gráfico tiene un botón ⓘ con su hoja y columna de origen y cómo interpretarlo (textos en `src/notes.js`), y cada área un recuadro "Cómo leer esta página".
+
+**Semáforo y límites** (`src/limits.js`): verde en rango, ámbar a menos del 10 % del límite, rojo fuera. Los límites del Excel (efectividad, SST, rangos del informe de calderas y glicol) son de solo lectura. Los de referencia (O.D., pH del permeado, cloro y conductividad de agua potable, torres según el RD 487/2022, Fructalys) se editan con el botón "Límites" y se guardan para todos en Vercel Blob (`config/limits.json`, vía `api/limits.js`); sin Blob, se guardan en el navegador.
+
+**Ver: diario, semanal o mensual** agrupa las tendencias con la media. Los enlaces antiguos (`#resumen`, `#proceso`, `#efectividad`, `#biologico`, `#instalaciones`) redirigen a la página nueva equivalente.
 
 **Interacción:**
 
@@ -122,16 +136,31 @@ Hoja por hoja:
 - **Vistas guardadas** (en el navegador) y enlaces que reproducen la vista.
 - Modo claro/oscuro y modo presentación a pantalla completa.
 
-## 6. Pasar a usuarios individuales
+## 6. Accesos: solicitudes y aprobación
 
-Añade la variable `DASHBOARD_USERS` con un JSON de usuario → hash SHA-256 de su contraseña:
+Cada persona tiene su cuenta (correo y contraseña):
 
-```bash
-npm run hash-password -- "contraseña-de-ana"
-# DASHBOARD_USERS={"ana":"<hash>","ismael":"<hash>"}
-```
+1. En la página de acceso, pestaña **Solicitar acceso**: nombre, correo, empresa, motivo y la contraseña que elige (se guarda cifrada con PBKDF2).
+2. El administrador recibe un aviso en el panel (botón **Accesos** con contador) y por correo.
+3. En **Accesos** aprueba o rechaza, elige el permiso (**lector**: solo consulta; **editor**: además publica Excel y cambia límites), retira accesos y ve el último acceso de cada uno. Si retira un acceso, la sesión deja de valer en unos segundos.
 
-Con esa variable la página de acceso pide usuario y contraseña, y `DASHBOARD_PASSWORD` deja de usarse. El usuario queda en la sesión (`lib/auth.js`) para registrar quién sube cada Excel si se quiere más adelante.
+### Contraseñas olvidadas y administradores
+
+- **«¿Has olvidado tu contraseña?»** en la entrada: el usuario escribe su correo y se avisa a los administradores (panel, contador de **Accesos**, y correo al principal). En **Accesos → Restablecer contraseña** se elige: un **enlace de un solo uso** (48 h) que se le envía por WhatsApp o correo, o una **contraseña provisional**. Los administradores pueden hacerlo también sin que el usuario lo pida.
+- Si quien la olvida es el administrador principal, el enlace le llega directamente por correo.
+- Permiso **Administrador** (en Accesos): gestiona accesos y contraseñas como el principal, pero no puede tocar la cuenta principal ni retirarse a sí mismo. Cada uno cambia solo su propia contraseña.
+- Para que el enlace llegue por correo directamente a cada usuario hay que verificar el dominio en Resend y definir `RESEND_FROM`.
+
+El administrador es `ADMIN_EMAIL` (por defecto `alejandro@revizo.es`). Entra con `DASHBOARD_PASSWORD` hasta que ponga una contraseña propia desde **Accesos**. Las sesiones de la antigua contraseña común ya no valen.
+
+| Variable | Para qué |
+|---|---|
+| `ADMIN_EMAIL` | Correo del administrador (opcional, por defecto alejandro@revizo.es) |
+| `RESEND_API_KEY` | Clave de [Resend](https://resend.com) para el aviso por correo de cada solicitud. Sin ella, el aviso solo aparece en el panel |
+| `RESEND_FROM` | Remitente con dominio verificado en Resend (opcional). Sin él se usa `onboarding@resend.dev`, que solo puede escribir al correo con el que se creó la cuenta de Resend |
+| `PUBLIC_URL` | Dirección del panel para el botón del correo (opcional) |
+
+Los usuarios se guardan en Vercel Blob (`config/users.json`, `lib/users.js`). Funciones: `api/request-access.js` (pública), `api/login.js`, `api/me.js`, `api/admin.js`.
 
 ## 7. Desarrollo local
 
@@ -157,11 +186,16 @@ index.html            página del dashboard
 public/login.html     acceso
 public/logo-*         logo de Revizo (original, recortado y versión para modo oscuro)
 src/parser/           motor de datos (Excel → formato largo)
-src/pages/            una página por pestaña
-src/ui/               gráficos (ECharts), componentes, formato
-src/store.js          filtros, selección cruzada y series
-api/                  login, logout, latest, history, upload (Vercel Functions)
-lib/auth.js           sesión firmada (Edge y Node)
+src/pages/            una página por pestaña (hoy, edari, calderas, fructalys, potable, guia…)
+src/ui/               gráficos (ECharts), componentes, kit de áreas (KPI, chips, matriz, explorador), formato
+src/store.js          filtros, selección cruzada, series y agrupación semanal/mensual
+src/limits.js         límites del semáforo (Excel + referencia editable)
+src/notes.js          textos explicativos (ⓘ, "Cómo leer esta página")
+api/                  login, logout, me, request-access, admin, latest, history, upload, limits (Vercel Functions)
+lib/auth.js           sesión firmada y contraseñas (Edge y Node)
+lib/users.js          usuarios y solicitudes (Vercel Blob)
+lib/mail.js           aviso por correo (Resend)
+src/admin.js          panel de accesos del administrador
 middleware.js         protege todo el sitio
 tests/                pruebas con node:test
 ```

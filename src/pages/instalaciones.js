@@ -1,28 +1,26 @@
-// Página Instalaciones: Torres, Calderas y glicol, Agua potable, Ósmosis O y P, Fructalys.
+// Página Ósmosis: plantas de ósmosis O y P (tendencias por punto y último registro).
+// Torres, calderas, glicol, agua potable y Fructalys tienen su propia área.
 import { state, sel, series } from '../store.js';
 import { card, tokens, timeXAxis, valueYAxis, axisTooltip, markLines, timeGrid, lineSeries, toData, attachDateClick, seriesRows, dataZoom, colorOf, RECORD_COLUMNS } from '../ui/charts.js';
 import { fmtNum, fmtDate, fmtDateLong, esc } from '../ui/format.js';
-import { selectEl, segmented, tableHTML } from '../ui/components.js';
+import { selectEl, tableHTML } from '../ui/components.js';
 import { paramsOf, pointsOf, applyPointFilter } from './common.js';
 
 const VIEWS = [
-  { id: 'torres', label: 'Torres', insts: ['Torres'], note: 'Hoja TORRES (23/07-31/08) y sección "Control de torres" de CALDERAS Y TORRES (desde el 02/09).' },
-  { id: 'calderas', label: 'Calderas y glicol', insts: ['Calderas', 'Glicol'], note: 'Hoja CALDERAS Y TORRES. Los rangos que aparecen en el informe del laboratorio se muestran como texto informativo, sin semáforo.' },
-  { id: 'potable', label: 'Agua potable', insts: ['Agua potable'], note: 'Hoja AGUA POTABLE.' },
   { id: 'osmo', label: 'Ósmosis O', insts: ['Ósmosis O'], note: 'Hoja PAR. PLANTA O.' },
   { id: 'osmp', label: 'Ósmosis P', insts: ['Ósmosis P'], note: 'Hoja PAR. PLANTA P.' },
-  { id: 'fructalys', label: 'Fructalys', insts: ['Fructalys'], note: 'Hoja FRUCTALYS. Los valores ">60000" no tienen valor numérico y se marcan aparte.' },
 ];
 
 export default function create() {
   const root = document.createElement('div');
   root.innerHTML = `
-    <div class="page-head"><div><h2>Instalaciones</h2><p>Tendencias por equipo y último registro de cada instalación. Sin semáforo: solo tendencia.</p></div></div>
+    <div class="page-head"><div><h2>Ósmosis</h2><p>Tendencias por punto y último registro de las plantas de ósmosis. Sin semáforo: solo tendencia.</p></div></div>
     <div class="sub-tabs" role="tablist"></div>
     <div class="grid"></div>`;
   const subs = root.querySelector('.sub-tabs');
   const grid = root.querySelector('.grid');
-  let view = sessionGet('inst-view') || 'torres';
+  let view = sessionGet('inst-view');
+  if (!VIEWS.some((v) => v.id === view)) view = 'osmo';
   const params = {};
 
   function drawTabs() {
@@ -49,8 +47,6 @@ export default function create() {
     }
     for (const inst of v.insts) if (sel().catalog[inst]) trendCard(inst, v, v.insts.length > 1 ? (inst === main ? 'col-8' : 'col-4') : 'col-12');
     lastCard(main, v);
-    if (view === 'calderas') { reactivosCard(); }
-    if (view === 'torres' || view === 'calderas') obsCard(v);
   }
 
   function trendCard(inst, v, cls) {
@@ -112,24 +108,6 @@ export default function create() {
     c.body.innerHTML = tableHTML(cols, rows);
     c.setRows(RECORD_COLUMNS, day);
     if (Object.keys(ref).some((k) => k.startsWith(inst + '|'))) c.setFoot('Entre paréntesis: rango que figura en el informe del laboratorio (informativo, sin semáforo).');
-  }
-
-  function reactivosCard() {
-    const c = card({ title: 'Verificación de reactivos', sub: '¿Las torres y calderas cuentan con reactivos suficientes para su dosificación?', cls: 'col-6', chart: false });
-    grid.appendChild(c.el);
-    const rows = state.data.tables.reactivos.filter((r) => inRange(r.d)).reverse();
-    const cols = [{ key: 'd', label: 'Fecha', fmt: (r) => fmtDate(r.d) }, { key: 'respuesta', label: 'Respuesta', html: true, fmt: (r) => `<span class="flag ${r.respuesta === 'SI' ? 'ok' : r.respuesta === 'NO' ? 'bad' : ''}">${r.respuesta}</span>`, csv: (r) => r.respuesta }, { key: 'obs', label: 'Observación' }];
-    c.body.innerHTML = tableHTML(cols, rows);
-    c.setRows(cols, rows);
-  }
-
-  function obsCard(v) {
-    const c = card({ title: 'Observaciones y comentarios', sub: v.label, cls: 'col-6', chart: false });
-    grid.appendChild(c.el);
-    const kinds = view === 'torres' ? ['Torres'] : ['Calderas'];
-    const list = state.data.obs.filter((o) => kinds.includes(o.kind) && inRange(o.d)).reverse();
-    c.body.innerHTML = list.length ? `<ul class="timeline">${list.map((o) => `<li><time>${fmtDate(o.d)}</time><div><p>${esc(o.text)}</p></div></li>`).join('')}</ul>` : '<p class="muted">Sin observaciones en el rango.</p>';
-    c.setRows([{ key: 'd', label: 'Fecha', fmt: (r) => fmtDate(r.d) }, { key: 'text', label: 'Texto' }, { key: 'cell', label: 'Celda' }], list);
   }
 
   const inRange = (d) => { const f = state.filters; return (!f.from || d >= f.from) && (!f.to || d <= f.to); };

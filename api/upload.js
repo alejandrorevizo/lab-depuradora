@@ -1,7 +1,7 @@
 // POST /api/upload -> autoriza la subida directa del navegador a Vercel Blob (client upload).
 // Solo genera el permiso si la petición trae una sesión válida.
 import { handleUpload } from '@vercel/blob/client';
-import { json, requireSession, blobConfigured, blobAccess, PREFIX } from './_common.js';
+import { json, requireEditor, blobConfigured, blobAccess, PREFIX } from './_common.js';
 
 const TYPES = [
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -18,7 +18,7 @@ export async function POST(request) {
       body,
       request,
       onBeforeGenerateToken: async (pathname) => {
-        const s = await requireSession(request);
+        const s = await requireEditor(request); // solo administrador y editores publican
         if (!s) throw new Error('No autorizado');
         if (!pathname.startsWith(PREFIX) || !/\.xls[xm]$/i.test(pathname) || pathname.includes('..')) throw new Error('Nombre de archivo no permitido');
         return {

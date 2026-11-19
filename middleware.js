@@ -1,11 +1,12 @@
 // Vercel Routing Middleware: protege todo el sitio con la sesión de lib/auth.js.
-// Quedan fuera la página de acceso, su logo, el login y la subida (que valida la sesión por su cuenta
-// porque Vercel Blob la llama también para confirmar la subida).
+// Quedan fuera la página de acceso, su logo, el login, la solicitud de acceso y el restablecimiento de contraseña
+// (públicos), la subida (que valida la sesión por su cuenta porque Vercel Blob la llama también para confirmar la
+// subida) y la sincronización con la nube (valida la sesión o el CRON_SECRET de la tarea programada).
 import { next } from '@vercel/functions';
 import { sessionFrom, authConfigured } from './lib/auth.js';
 
 export const config = {
-  matcher: ['/((?!login\\.html|api/login|api/upload|favicon\\.svg|logo-revizo-crop\\.jpg|logo-revizo-dark-crop\\.png).*)'],
+  matcher: ['/((?!login\\.html|api/login|api/request-access|api/password-reset|api/upload|api/sync|favicon\\.svg|logo-revizo-crop\\.jpg|logo-revizo-dark-crop\\.png).*)'],
 };
 
 export default async function middleware(request) {

@@ -9,28 +9,44 @@ import { FLAG_LABEL } from './parser/util.js';
 import { parseBuffer, fetchShared, fetchHistory, uploadShared, logout } from './data.js';
 import { instSort } from './pages/common.js';
 import { orderPoints } from './ui/charts.js';
+import { segmented } from './ui/components.js';
+import { loadLimits, saveLimits, allLimits, currentOverrides, limitsStorage, limitText, REF_DEFAULTS } from './limits.js';
+import { areaById, areaStatus } from './pages/areas.js';
+import { statusDot, STATUS_TEXT } from './ui/kit.js';
+import { openAdmin } from './admin.js';
 
-import resumen from './pages/resumen.js';
-import proceso from './pages/proceso.js';
-import efectividad from './pages/efectividad.js';
+import hoy from './pages/hoy.js';
+import edari from './pages/edari.js';
+import calderas from './pages/calderas.js';
+import fructalys from './pages/fructalys.js';
+import potable from './pages/potable.js';
 import parametros from './pages/parametros.js';
-import biologico from './pages/biologico.js';
 import instalaciones from './pages/instalaciones.js';
 import analisis from './pages/analisis.js';
 import bitacora from './pages/bitacora.js';
 import calidad from './pages/calidad.js';
+import guia from './pages/guia.js';
+import camaras from './pages/camaras.js';
 
+// Pestañas principales (las cuatro áreas y la portada) y secundarias (menú "Más").
 const TABS = [
-  { id: 'resumen', label: 'Resumen', create: resumen },
-  { id: 'proceso', label: 'Proceso DQO', create: proceso },
-  { id: 'efectividad', label: 'Efectividad', create: efectividad },
-  { id: 'parametros', label: 'Parámetros por punto', create: parametros },
-  { id: 'biologico', label: 'Biológico', create: biologico },
-  { id: 'instalaciones', label: 'Instalaciones', create: instalaciones },
-  { id: 'analisis', label: 'Análisis', create: analisis },
-  { id: 'bitacora', label: 'Bitácora', create: bitacora },
-  { id: 'calidad', label: 'Calidad de datos', create: calidad },
+  { id: 'hoy', label: 'Planta hoy', create: hoy },
+  { id: 'edari', label: 'EDARI', create: edari, area: true },
+  { id: 'calderas', label: 'Calderas y torres', create: calderas, area: true },
+  { id: 'fructalys', label: 'Fructalys', create: fructalys, area: true },
+  { id: 'potable', label: 'Agua potable', create: potable, area: true },
+  { id: 'camaras', label: 'Cámaras', create: camaras },
+  { id: 'parametros', label: 'Explorador por punto', create: parametros, more: true, desc: 'Mapa de calor y pequeños múltiplos de cualquier parámetro' },
+  { id: 'osmosis', label: 'Ósmosis', create: instalaciones, more: true, desc: 'Plantas de ósmosis O y P' },
+  { id: 'analisis', label: 'Análisis', create: analisis, more: true, desc: 'Gráfico de control, correlación y comparación de periodos' },
+  { id: 'bitacora', label: 'Bitácora', create: bitacora, more: true, desc: 'Todas las observaciones y el registro fotográfico' },
+  { id: 'calidad', label: 'Calidad de datos', create: calidad, more: true, desc: 'Hojas leídas, huecos, descartes y avisos' },
+  { id: 'guia', label: 'Guía y fuentes', create: guia, more: true, desc: 'De dónde sale cada dato y cómo interpretarlo' },
 ];
+const PRIMARY = TABS.filter((t) => !t.more);
+// Enlaces de la versión anterior.
+const ALIAS = { resumen: 'hoy', proceso: 'edari', efectividad: 'edari', biologico: 'edari', instalaciones: 'osmosis' };
+const resolveTab = (id) => (TABS.some((t) => t.id === id) ? id : ALIAS[id] || null);
 
 const $ = (s) => document.querySelector(s);
 const main = $('#main');
@@ -66,7 +82,7 @@ $('#btn-present').onclick = async () => {
     });
     m.el.querySelector('#rot').onchange = (e) => {
       clearInterval(rotateTimer);
-      if (e.target.checked) rotateTimer = setInterval(() => { const i = TABS.findIndex((t) => t.id === state.tab); setTab(TABS[(i + 1) % TABS.length].id); }, 20000);
+      if (e.target.checked) rotateTimer = setInterval(() => { const i = PRIMARY.findIndex((t) => t.id === state.tab); setTab(PRIMARY[(i + 1) % PRIMARY.length].id); }, 20000);
     };
   } else exitPresent();
 };
@@ -82,28 +98,91 @@ document.addEventListener('fullscreenchange', () => { if (!document.fullscreenEl
 // ---------------------------------------------------------------------------
 async function boot() {
   const h = fromHash(location.hash);
-  if (h.tab && TABS.some((t) => t.id === h.tab)) state.tab = h.tab;
+  if (resolveTab(h.tab)) state.tab = resolveTab(h.tab);
   Object.assign(state.filters, h.filters);
   if (h.date) state.sel.date = h.date;
 
-  const r = await fetchShared();
+  const [r] = await Promise.all([fetchShared(), loadLimits()]);
   if (r.status === 'auth') { location.href = '/login.html'; return; }
   apiMode = r.status === 'noapi' ? 'noapi' : 'api';
+  if (apiMode === 'api') await loadMe();
   state.storage = r.status === 'ok' || r.status === 'empty' ? 'blob' : 'none';
   state.blobAccess = r.access || 'private';
   if (apiMode === 'noapi') { $('#btn-logout').classList.add('hidden'); $('#btn-history').classList.add('hidden'); }
   if (state.storage !== 'blob') $('#btn-history').classList.add('hidden');
+  let shown = false;
   if (r.status === 'ok') {
     try {
       const data = await parseBuffer(r.buf, r.meta.fileName);
       applyData(data, { mode: 'shared', ...r.meta });
-      return;
+      shown = true;
     } catch (e) {
       toast(`No se pudo leer el Excel guardado: ${e.message}`, 'warn');
     }
   }
-  showEmpty(r.status);
+  if (!shown) showEmpty(r.status);
+  if (apiMode === 'api' && state.storage === 'blob') checkSource();
 }
+
+// ---------------------------------------------------------------------------
+// Sincronización con la nube (Google Drive u OneDrive): al abrir el panel se comprueba (como mucho cada 10 min) si hay un Excel
+// más nuevo en el enlace configurado; si lo hay, el servidor lo publica y aquí se recarga.
+// ---------------------------------------------------------------------------
+let sync = null;
+const src = () => (sync && sync.source) || "la nube";
+async function checkSource(force = false) {
+  const btn = $('#btn-sync');
+  if (force) { btn.disabled = true; btn.classList.add('spinning'); }
+  try {
+    const r = await fetch('/api/sync', { method: force ? 'POST' : 'GET', cache: 'no-store', credentials: 'same-origin' });
+    const j = await r.json().catch(() => ({}));
+    if (!j.configured) return;
+    sync = j;
+    btn.classList.toggle('hidden', !canEdit());
+    if (j.error && force) toast(`No se pudo leer ${src()}: ${j.error}`, 'warn');
+    const viewingLatest = !state.source || state.source.mode === 'shared';
+    if (j.changed && viewingLatest) {
+      const s = await fetchShared();
+      if (s.status === 'ok') {
+        applyData(await parseBuffer(s.buf, s.meta.fileName), { mode: 'shared', ...s.meta, fromCloud: true });
+        toast(`Datos actualizados con el Excel más reciente de ${src()}.`);
+      }
+    } else if (j.changed) toast(`Hay un Excel nuevo en ${src()}. Vuelve a la última versión para verlo.`);
+    else if (force) toast(`El Excel de ${src()} no ha cambiado desde la última comprobación.`);
+    renderSource();
+  } catch (e) {
+    if (force) toast(`No se pudo comprobar ${src()}: ${e.message}`, 'warn');
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove('spinning');
+  }
+}
+$('#btn-sync').onclick = () => checkSource(true);
+$('#btn-help').onclick = () => { if (state.data) setTab('guia'); else toast('Carga primero un Excel para ver la guía con sus datos.'); };
+
+// ---------------------------------------------------------------------------
+// Usuario de la sesión y panel de accesos
+// ---------------------------------------------------------------------------
+let me = { role: 'admin' }; // en modo local (sin /api) se puede todo
+const canEdit = () => me.role === 'admin' || me.role === 'editor';
+async function loadMe() {
+  try {
+    const r = await fetch('/api/me', { cache: 'no-store', credentials: 'same-origin' });
+    if (r.status === 401) { location.href = '/login.html'; return; }
+    if (r.ok) me = await r.json();
+  } catch (e) { /* se mantiene el modo local */ }
+  $('#btn-upload').classList.toggle('hidden', !canEdit());
+  $('#btn-logout').title = `Cerrar sesión${me.email ? ' (' + me.email + ')' : ''}`;
+  const adm = me.role === 'admin';
+  $('#btn-access').classList.toggle('hidden', !adm);
+  const badge = $('#access-badge');
+  const count = (me.pending || 0) + (me.resets || 0);
+  badge.textContent = count || '';
+  badge.title = `${me.pending || 0} solicitudes de acceso · ${me.resets || 0} peticiones de contraseña`;
+  badge.classList.toggle('hidden', !adm || !count);
+  if (adm && location.hash.startsWith('#accesos')) { history.replaceState(null, '', '#hoy'); openAdmin(loadMe); }
+}
+$('#btn-access').onclick = () => openAdmin(loadMe);
 
 function showEmpty(status) {
   $('#filterbar').classList.add('hidden');
@@ -130,9 +209,10 @@ function applyData(data, source) {
 }
 
 subscribe((reason) => {
+  if (!state.data) return;
   if (reason === 'data') { renderSource(); renderFilterBar(); renderTabs(); mountPage(); syncHash(); return; }
-  if (reason === 'tab') { renderTabs(); mountPage(); syncHash(); window.scrollTo({ top: 0 }); return; }
-  if (reason === 'filters') { renderFilterBar(); page && page.update('filters'); syncHash(); return; }
+  if (reason === 'tab') { renderFilterBar(); renderTabs(); mountPage(); syncHash(); window.scrollTo({ top: 0 }); return; }
+  if (reason === 'filters') { renderFilterBar(); renderTabs(); page && page.update('filters'); syncHash(); return; }
   if (reason === 'sel') { renderFilterBar(); page && page.update('sel'); syncHash(); if (state.sel.date) openDay(state.sel.date); else closeDrawer(); return; }
   if (reason === 'sel-quiet') { renderFilterBar(); page && page.update('sel-train'); syncHash(); }
 });
@@ -142,16 +222,20 @@ function syncHash() {
   if (location.hash !== h) history.replaceState(null, '', h);
 }
 window.addEventListener('hashchange', () => {
-  const h = fromHash(location.hash);
-  if (h.tab && h.tab !== state.tab && TABS.some((t) => t.id === h.tab)) setTab(h.tab);
+  const t = resolveTab(fromHash(location.hash).tab);
+  if (t && t !== state.tab) setTab(t);
 });
 
 function renderSource() {
   const s = state.source || {};
   const when = s.uploadedAt ? new Date(s.uploadedAt).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' }) : '';
   const mode = s.mode === 'shared' ? 'compartido' : s.mode === 'history' ? 'versión anterior' : 'solo en esta sesión';
-  $('#source-label').textContent = `${s.fileName || 'Excel'} · ${mode}${when ? ' · subido ' + when : ''}${s.uploadedBy ? ' por ' + s.uploadedBy : ''}`;
-  $('#source-label').title = $('#source-label').textContent;
+  const t = (iso) => new Date(iso).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' });
+  const od = sync && s.mode === 'shared'
+    ? (sync.lastError ? ` · ${src()}: error al leer` : sync.lastModified ? ` · ${src()}: modificado ${t(sync.lastModified)}` : '')
+    : '';
+  $('#source-label').textContent = `${s.fileName || 'Excel'} · ${mode}${when ? ' · publicado ' + when : ''}${s.uploadedBy ? ' por ' + s.uploadedBy : ''}${od}`;
+  $('#source-label').title = `${$('#source-label').textContent}${sync && sync.lastCheck ? `\nÚltima comprobación de ${src()}: ${t(sync.lastCheck)}` : ''}${sync && sync.lastError ? `\nError: ${sync.lastError}` : ''}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -178,6 +262,13 @@ function renderFilterBar() {
     b.onclick = () => setFilters({ ...presetRange(p.id), preset: p.id });
     presets.appendChild(b);
   }
+  const aggG = el('div', { class: 'filter-group always' }, '<span class="filter-label">Ver</span>');
+  aggG.appendChild(segmented([{ value: 'd', label: 'Diario' }, { value: 'w', label: 'Semanal' }, { value: 'm', label: 'Mensual' }], f.agg || 'd', (v) => setFilters({ agg: v })));
+  aggG.title = 'Agrupa las tendencias por semana o mes (media). Los KPI y semáforos usan siempre el último valor diario.';
+  const limBtn = el('button', { class: 'btn ghost', type: 'button', title: 'Ver y editar los límites del semáforo' }, '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>Límites');
+  limBtn.onclick = openLimits;
+  const isMore = TABS.find((t) => t.id === state.tab)?.more;
+  if (!isMore) { bar.append(tgl, dates, presets, aggG, el('span', { class: 'spacer' }), limBtn); return; }
   const dims = el('div', { class: 'filter-group' });
   const cat = sel().catalog;
   const instOpts = Object.keys(cat).sort(instSort).map((i) => ({ value: i, label: i }));
@@ -206,7 +297,7 @@ function renderFilterBar() {
     clr.onclick = () => { state.sel.date = null; setFilters({ ...presetRange('all'), preset: 'all', inst: [], point: [], param: [] }); };
     chips.appendChild(clr);
   }
-  bar.append(tgl, dates, presets, dims, chips);
+  bar.append(tgl, dates, presets, aggG, dims, chips, el('span', { class: 'spacer' }), limBtn);
 }
 
 // ---------------------------------------------------------------------------
@@ -215,10 +306,79 @@ function renderFilterBar() {
 function renderTabs() {
   const nav = $('#tabs');
   nav.classList.remove('hidden');
-  const warns = state.data.issues.filter((i) => i.level === 'warn' && (i.type === 'missing' || i.type === 'header')).length;
-  nav.innerHTML = TABS.map((t) => `<button class="tab" role="tab" data-tab="${t.id}" aria-selected="${t.id === state.tab}">${t.label}${t.id === 'calidad' && warns ? `<span class="badge" title="Hojas que faltan o con cabecera cambiada">${warns}</span>` : ''}</button>`).join('');
-  nav.querySelectorAll('.tab').forEach((b) => (b.onclick = () => setTab(b.dataset.tab)));
-  nav.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  const warns = Object.values(state.data.sheets).filter((s) => s.status === 'missing' || s.status === 'header-changed').length;
+  const cur = TABS.find((t) => t.id === state.tab);
+  nav.innerHTML = PRIMARY.map((t) => {
+    const st = t.area ? areaStatus(areaById(t.id)) : null;
+    return `<button class="tab" role="tab" data-tab="${t.id}" aria-selected="${t.id === state.tab}">${st && st !== 'none' ? statusDot(st, STATUS_TEXT[st]) : ''}${t.label}</button>`;
+  }).join('') + `<div class="more">
+      <button class="tab more-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-selected="${!!cur?.more}">${cur?.more ? esc(cur.label) : 'Más'}${warns ? '<span class="badge">!</span>' : ''}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></button>
+      <div class="more-menu" role="menu">${TABS.filter((t) => t.more).map((t) => `<button role="menuitem" type="button" data-tab="${t.id}" aria-current="${t.id === state.tab}"><b>${esc(t.label)}</b><span>${esc(t.desc)}</span></button>`).join('')}</div>
+    </div>`;
+  nav.querySelectorAll('[data-tab]').forEach((b) => (b.onclick = () => { nav.querySelector('.more').classList.remove('open'); setTab(b.dataset.tab); }));
+  const more = nav.querySelector('.more');
+  const mb = more.querySelector('.more-btn');
+  mb.onclick = (e) => { e.stopPropagation(); const o = more.classList.toggle('open'); mb.setAttribute('aria-expanded', String(o)); };
+}
+document.addEventListener('click', (e) => {
+  const more = document.querySelector('#tabs .more');
+  if (more && !more.contains(e.target)) { more.classList.remove('open'); more.querySelector('.more-btn').setAttribute('aria-expanded', 'false'); }
+});
+
+// ---------------------------------------------------------------------------
+// Límites del semáforo
+// ---------------------------------------------------------------------------
+function openLimits() {
+  if (!state.data) return;
+  const list = allLimits(state.data);
+  const ov = currentOverrides();
+  const fmt = (v) => (v == null ? '' : String(v).replace('.', ','));
+  const pts = (l) => (l.points === '*' ? 'Todos' : l.points.join(', '));
+  const excel = list.filter((l) => l.src === 'excel');
+  const refs = list.filter((l) => l.src === 'ref');
+  const body = `
+    <p class="muted small" style="margin-top:0">Verde en rango · ámbar a menos del 10 % del límite · rojo fuera. Cuando hay límite en el Excel, manda el del Excel.</p>
+    <h4 class="sub-h">Del Excel <span class="src excel">solo lectura</span></h4>
+    <div class="table-wrap"><table class="t"><thead><tr><th>Área</th><th>Parámetro</th><th>Puntos</th><th>Límite</th><th>Origen</th></tr></thead><tbody>
+      ${excel.map((l) => `<tr><td>${esc(l.inst)}</td><td>${esc(l.param)}</td><td>${esc(pts(l))}</td><td class="num">${esc(limitText(l))}</td><td class="muted small">${esc(l.note)}</td></tr>`).join('')}
+    </tbody></table></div>
+    <h4 class="sub-h">De referencia <span class="src ref">editables</span></h4>
+    <div class="table-wrap"><table class="t lim-edit"><thead><tr><th>Activo</th><th>Área</th><th>Parámetro</th><th>Puntos</th><th>Mínimo</th><th>Máximo</th><th>Nota</th></tr></thead><tbody>
+      ${refs.map((l) => `<tr data-id="${l.id}"><td><input type="checkbox" data-k="on" ${l.off ? '' : 'checked'} aria-label="Activo"></td><td>${esc(l.inst)}</td><td>${esc(l.param)}</td><td>${esc(pts(l))}</td>
+        <td><input class="num-in" data-k="min" inputmode="decimal" value="${fmt(l.min)}" placeholder="–" aria-label="Mínimo"></td>
+        <td><input class="num-in" data-k="max" inputmode="decimal" value="${fmt(l.max)}" placeholder="–" aria-label="Máximo"></td>
+        <td class="muted small">${esc(l.note)}${l.unit ? ` (${esc(l.unit)})` : ''}</td></tr>`).join('')}
+    </tbody></table></div>
+    <p class="muted small">${limitsStorage() === 'shared' ? 'Los cambios se guardan para todos los usuarios.' : 'Sin almacenamiento compartido: los cambios se guardan solo en este navegador.'}</p>`;
+  const foot = document.createElement('div');
+  foot.style.display = 'contents';
+  if (!canEdit()) {
+    foot.innerHTML = '<span class="muted small" style="margin-right:auto">Solo el administrador y los editores pueden cambiar los límites.</span><button class="btn primary" data-close>Cerrar</button>';
+    const m = modal({ title: 'Límites del semáforo', body, foot, width: 980 });
+    m.body.querySelectorAll('.lim-edit input').forEach((i) => (i.disabled = true));
+    return;
+  }
+  foot.innerHTML = '<button class="btn ghost" data-reset style="margin-right:auto">Restablecer valores de referencia</button><button class="btn" data-cancel>Cancelar</button><button class="btn primary" data-save>Guardar</button>';
+  const m = modal({ title: 'Límites del semáforo', body, foot, width: 980 });
+  foot.querySelector('[data-cancel]').onclick = m.close;
+  foot.querySelector('[data-reset]').onclick = async () => { try { await saveLimits({}); m.close(); toast('Límites de referencia restablecidos.'); mountPage(); renderTabs(); } catch (e) { toast(e.message, 'warn'); } };
+  foot.querySelector('[data-save]').onclick = async () => {
+    const next = { ...ov };
+    for (const tr of m.body.querySelectorAll('tr[data-id]')) {
+      const id = tr.dataset.id;
+      const def = REF_DEFAULTS.find((d) => d.id === id);
+      const read = (k) => { const s = tr.querySelector(`[data-k="${k}"]`).value.trim().replace(',', '.'); return s === '' ? null : +s; };
+      const min = read('min'), max = read('max');
+      if ((min != null && !Number.isFinite(min)) || (max != null && !Number.isFinite(max))) { toast(`Valor no válido en ${def.param}.`, 'warn'); return; }
+      if (min != null && max != null && min > max) { toast(`En ${def.param} el mínimo es mayor que el máximo.`, 'warn'); return; }
+      const e = {};
+      if (min !== def.min) e.min = min;
+      if (max !== def.max) e.max = max;
+      if (!tr.querySelector('[data-k="on"]').checked) e.off = true;
+      if (Object.keys(e).length) next[id] = e; else delete next[id];
+    }
+    try { await saveLimits(next); m.close(); toast('Límites guardados.'); mountPage(); renderTabs(); } catch (e) { toast(`No se pudieron guardar: ${e.message}`, 'warn'); }
+  };
 }
 
 function mountPage() {
@@ -230,11 +390,32 @@ function mountPage() {
   try {
     page = t.create();
     main.appendChild(page.el);
+    if (!t.more) insertLegend(page.el);
   } catch (e) {
     console.error(e);
     page = null;
     main.insertAdjacentHTML('beforeend', `<div class="notice"><b>No se pudo dibujar esta página.</b> ${esc(e.message)}. El resto de páginas siguen disponibles.</div>`);
   }
+}
+
+/** Leyenda fija del semáforo y de los símbolos, bajo la cabecera de cada página principal. */
+function insertLegend(root) {
+  const bar = document.createElement('div');
+  bar.className = 'legend-bar';
+  bar.innerHTML = `<b>Cómo leer los colores:</b>
+    <span>${statusDot('good')} En rango</span>
+    <span>${statusDot('warn')} Cerca del límite</span>
+    <span>${statusDot('bad')} Fuera de límite</span>
+    <span>${statusDot('none')} Sin límite</span>
+    <i class="sep"></i>
+    <span><span class="src excel">Excel</span> límite escrito en el libro</span>
+    <span><span class="src ref">Referencia</span> valor habitual del sector</span>
+    <i class="sep"></i>
+    <span>✎ día con observación</span>
+    <span>Clic en un gráfico: detalle del día</span>
+    <a href="#guia">Guía completa →</a>`;
+  const head = root.querySelector('.head-host, .hoy-head');
+  if (head) head.after(bar); else root.prepend(bar);
 }
 
 function pageWarnings() {
@@ -266,7 +447,7 @@ function openDay(d) {
   const groups = {};
   for (const r of recs) (groups[r.inst] = groups[r.inst] || []).push(r);
   let h = `<div class="modal-head"><h3>${fmtDateLong(d)}</h3><button class="btn ghost" style="margin-left:auto" data-close>Cerrar</button></div><div class="modal-body">`;
-  h += `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"><button class="btn" data-prev>‹ Día anterior</button><button class="btn" data-next>Día siguiente ›</button><button class="btn" data-go="proceso">Ver en Proceso DQO</button><button class="btn ghost" data-clear>Quitar selección</button></div>`;
+  h += `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"><button class="btn" data-prev>‹ Día anterior</button><button class="btn" data-next>Día siguiente ›</button><button class="btn" data-go="edari">Ver en EDARI</button><button class="btn ghost" data-clear>Quitar selección</button></div>`;
   if (obs.length) h += `<div class="notice info" style="display:block">${obs.map((o) => `<div style="margin:2px 0">✎ <b>${esc(o.kind)}</b>: ${esc(o.text)}</div>`).join('')}</div>`;
   if (!recs.length) h += '<p class="muted">No hay datos en esta fecha.</p>';
   for (const inst of Object.keys(groups).sort(instSort)) {
@@ -289,7 +470,7 @@ function openDay(d) {
   drawer.querySelector('[data-clear]').onclick = () => { closeDrawer(); clearSelection(); };
   drawer.querySelector('[data-prev]').onclick = () => { if (i > 0) { state.sel.date = null; selectDate(allDates[i - 1]); } };
   drawer.querySelector('[data-next]').onclick = () => { if (i < allDates.length - 1) { state.sel.date = null; selectDate(allDates[i + 1]); } };
-  drawer.querySelector('[data-go]').onclick = () => { closeDrawer(); setTab('proceso'); };
+  drawer.querySelector('[data-go]').onclick = () => { closeDrawer(); setTab('edari'); };
 }
 function closeDrawer() { drawer.classList.remove('open'); }
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && drawer.classList.contains('open')) closeDrawer(); });
