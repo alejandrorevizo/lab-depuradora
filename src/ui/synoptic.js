@@ -26,7 +26,17 @@ function reading(inst, point, param, d, unit = '') {
 // ---------- Piezas de dibujo ----------
 const T = (x, y, s, cls = '', anchor = 'middle') => `<text x="${x}" y="${y}" text-anchor="${anchor}" class="${cls}">${s}</text>`;
 
-/** Etiqueta de equipo: nombre y lista de lecturas, con el punto de color de cada una. */
+/** Rango compacto del límite para mostrar junto al parámetro: "6,5–9", "< 15", "≥ 0,5". */
+function shortLim(lim) {
+  if (!lim) return '';
+  const f = (x) => new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2, useGrouping: false }).format(x);
+  if (lim.min != null && lim.max != null) return `${f(lim.min)}–${f(lim.max)}`;
+  if (lim.max != null) return `< ${f(lim.max)}`;
+  if (lim.min != null) return `≥ ${f(lim.min)}`;
+  return '';
+}
+
+/** Etiqueta de equipo: nombre y lista de lecturas, con el punto de color de cada una (y su rango si r.showLim). */
 function tag(x, y, title, rows, w = 150) {
   const h = 22 + rows.length * 17;
   const st = worstOf(rows.map((r) => r.st));
@@ -35,7 +45,7 @@ function tag(x, y, title, rows, w = 150) {
     ${T(10, 16, esc(title), 'syn-tag-t', 'start')}
     ${rows.map((r, i) => `<g transform="translate(0,${32 + i * 17})">
       <circle cx="13" cy="-4" r="3.6" class="dot-${r.st}"/>
-      ${T(22, 0, esc(r.label || r.param), 'syn-k', 'start')}
+      <text x="22" y="0" text-anchor="start" class="syn-k">${esc(r.label || r.param)}${r.showLim && shortLim(r.lim) ? `<tspan class="syn-lim" dx="4">(${esc(shortLim(r.lim))})</tspan>` : ''}</text>
       ${T(w - 9, 0, r.v == null ? esc(r.raw || '–') : `${fmtNum(r.v, r.param)}${r.unit ? ' ' + esc(r.unit) : ''}`, 'syn-v', 'end')}
       <title>${esc(`${r.param}: ${r.v == null ? r.raw || 'sin dato' : fmtNum(r.v, r.param)} ${r.unit}${r.lim ? ` · ${SRC_LABEL[r.lim.src]} ${limitText(r.lim)}` : ' · sin límite'}`)}</title>
     </g>`).join('')}
@@ -327,10 +337,11 @@ export function fructalysSVG(d) {
 const TOWERS = ['INOX (T1)', 'ITR (T2)', 'ALT (T3)', 'EOS 3 (T4)', 'EOS 1', 'EOS 2'];
 export function torresSVG(d) {
   const W = 200;
-  return `<svg viewBox="0 0 1240 300" class="synoptic" role="img" aria-label="Torres de refrigeración con el análisis del día">
+  return `<svg viewBox="0 0 1252 300" class="synoptic" role="img" aria-label="Torres de refrigeración con el análisis del día">
     ${TOWERS.map((t, i) => {
       const rows = [reading('Torres', t, 'Turbidez', d, 'NTU'), reading('Torres', t, 'pH', d, ''), reading('Torres', t, 'Conductividad', d, 'µS/cm'), { ...reading('Torres', t, 'Biocida', d, 'ppm') }];
       rows[2].label = 'Cond.';
+      for (const r of rows) r.showLim = true;
       const st = worstOf(rows.map((x) => x.st));
       const x = 20 + i * (W + 6), cx = x + W / 2;
       return `<g class="syn-eq st-${st}">
@@ -339,7 +350,7 @@ export function torresSVG(d) {
         <g class="syn-fan" style="transform-origin:${cx}px 32px"><ellipse cx="${cx}" cy="32" rx="30" ry="5" class="syn-top"/><path d="M${cx - 26},32 h52 M${cx},28 v8" class="syn-blade"/></g>
         <path d="M${cx - 14},20 q6,-10 0,-18 M${cx + 10},20 q6,-10 0,-18" class="syn-steam"/>
         ${T(cx, 170, esc(t), 'syn-name')}
-      </g>${tag(cx, 180, 'Último análisis', rows, 176)}`;
+      </g>${tag(cx, 180, 'Último análisis', rows, 194)}`;
     }).join('')}
   </svg>`;
 }

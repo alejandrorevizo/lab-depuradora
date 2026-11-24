@@ -487,6 +487,7 @@ table.alerts td { vertical-align: middle; }
 .synoptic { display: block; width: 100%; min-width: 880px; height: auto; font-family: var(--font); --water: color-mix(in srgb, #2a78d6 16%, var(--surface)); --st: var(--axis); }
 .synoptic text { fill: var(--ink); }
 .syn-k { font-size: 11.5px; fill: var(--ink-3) !important; }
+.syn-lim { font-size: 10px; opacity: .85; }
 .syn-name { font-size: 13px; font-weight: 650; }
 .syn-ground { stroke: var(--border-strong); stroke-dasharray: 2 5; }
 .syn-eq .syn-body, .syn-eq .syn-top { fill: var(--surface-2); stroke: var(--st); stroke-width: 2.4; }
