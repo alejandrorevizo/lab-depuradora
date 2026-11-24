@@ -62,8 +62,8 @@ export const NOTES = {
     'Muchos ciclos significa poca purga, con ahorro de agua y energía pero riesgo de incrustaciones. Pocos ciclos significa que se purga de más y se tira agua caliente y producto químico. Lo importante es que sea estable.'),
   torres: n(
     'Torres de refrigeración: enfrían el agua de proceso por evaporación. Por su riesgo de legionela están reguladas.',
-    'Hoja <b>TORRES</b> (del 23/07 al 27/08) y sección «Control de torres» de <b>CALDERAS Y TORRES</b> (desde el 02/09). Límites de <b>referencia</b> según el RD 487/2022: pH 6,5–9 y turbidez ≤ 15 NTU.',
-    'Turbidez alta: agua sucia, con lodos o biofilm, y mayor riesgo microbiológico; revisar purgas y biocida. pH fuera de 6,5–9: corrosión o incrustación, y el biocida pierde eficacia. El biocida (ppm) es la dosis aplicada.'),
+    'Hoja <b>TORRES</b> (del 23/07 al 27/08) y sección «Control de torres» de <b>CALDERAS Y TORRES</b> (desde el 02/09). Límites de <b>referencia</b> del programa de mantenimiento químico 2025: pH 6,5–9, conductividad &lt; 4000 µS/cm, turbidez &lt; 15 NTU y biocida (Ferrocid 4601) ≥ 0,50 ppm.',
+    'Turbidez alta: agua sucia, con lodos o biofilm, y mayor riesgo microbiológico; revisar purgas y biocida. pH fuera de 6,5–9: corrosión o incrustación, y el biocida pierde eficacia. Conductividad alta: faltan purgas. Biocida por debajo de 0,50 ppm: protección insuficiente frente a legionela.'),
   glicol: n(
     'Circuito de glicol (anticongelante de frío industrial) y comprobación diaria de reactivos.',
     'Hoja <b>CALDERAS Y TORRES</b>, secciones «Control de glicol» y «Verificación de reactivos». El pH ≥ 9 sale del informe del laboratorio.',
@@ -79,11 +79,11 @@ export const NOTES = {
   },
   torresParam: {
     _: 'Hoja <b>TORRES</b> y sección «Control de torres» de CALDERAS Y TORRES.',
-    Turbidez: 'Referencia ≤ 15 NTU (RD 487/2022). Por encima indica suciedad o biofilm.',
-    pH: 'Referencia 6,5–9 (RD 487/2022).',
-    Conductividad: 'Sales concentradas por la evaporación; se controla con las purgas. Sin límite en el Excel.',
+    Turbidez: 'Referencia &lt; 15 NTU (programa de mantenimiento químico 2025). Por encima indica suciedad o biofilm.',
+    pH: 'Referencia 6,5–9 (programa de mantenimiento químico 2025).',
+    Conductividad: 'Sales concentradas por la evaporación; se controla con las purgas. Referencia &lt; 4000 µS/cm (programa de mantenimiento químico 2025).',
     Temperatura: 'Temperatura del agua de la torre (°C).',
-    Biocida: 'Dosis de biocida aplicada (ppm).',
+    Biocida: 'Biocida Ferrocid 4601 (ppm), medido con fotómetro de cloro. Concentración mínima 0,50 ppm (programa de mantenimiento químico 2025).',
   },
 
   // ---------- Fructalys ----------
@@ -128,7 +128,7 @@ export function paramNote(map, param) {
 export const HOWTO = {
   hoy: 'Esta portada resume las cuatro áreas de la planta con su <b>último dato</b>. Cada tarjeta muestra cuatro indicadores clave, con un punto de color (su semáforo), su tendencia reciente y su valor. La franja de color de arriba de cada tarjeta es el peor estado del área. Abajo, <b>Alertas</b> lista todo lo que está fuera o cerca del límite, y <b>Últimas observaciones</b> recoge los comentarios del laboratorio. Pulsa una tarjeta o una alerta para ir al área. Los datos salen del Excel «COMPORTAMIENTO DE LA DQO OFICIAL», que el panel lee de Google Drive.',
   edari: 'La <b>EDARI</b> es la depuradora. El Excel la mide en estos puntos, con este orden de columnas: <b>Entrada, Homo, DAF y Permeado</b>, más el reactor biológico <b>Bio 2</b> y otros puntos de muestreo (<b>Balsa N, Chulives y Tanque gris</b>). Lo fundamental: <b>la DQO del permeado debe ser baja y la efectividad estar entre el 90 y el 98 %</b> (banda del propio Excel). Para que el biológico funcione, el fango (SST de Bio 2) debe estar entre 8.000 y 12.000 mg/L, también según el Excel.',
-  calderas: 'Las <b>calderas</b> producen vapor. Su agua debe estar libre de cal (descalcificador) y con un pH alto para no corroer, y se purga para que no se acumulen sales. Las <b>torres</b> enfrían agua por evaporación y se controlan por su riesgo de legionela: turbidez baja, pH entre 6,5 y 9 y biocida dosificado. El <b>glicol</b> es el anticongelante del circuito de frío. Arriba ves el estado de cada equipo el día elegido; abajo, las tendencias.',
+  calderas: 'Las <b>calderas</b> producen vapor. Su agua debe estar libre de cal (descalcificador) y con un pH alto para no corroer, y se purga para que no se acumulen sales. Las <b>torres</b> enfrían agua por evaporación y se controlan por su riesgo de legionela: turbidez &lt; 15 NTU, pH entre 6,5 y 9, conductividad &lt; 4000 µS/cm y biocida ≥ 0,50 ppm. El <b>glicol</b> es el anticongelante del circuito de frío. Arriba ves el estado de cada equipo el día elegido; abajo, las tendencias.',
   fructalys: '<b>Fructalys</b> es la hoja FRUCTALYS del Excel: un análisis por día de pH, conductividad, temperatura, DQO y turbidez de un mismo punto, más una columna de observaciones. El Excel no indica de qué agua se trata ni a dónde va. Muchos análisis de DQO dan «>60.000»: superan lo que el método puede medir y se marcan aparte, no se pierden.',
   potable: 'La hoja AGUA POTABLE mide tres puntos: <b>Entrada «P», Tanque «P» y Salida «P»</b> (cloro libre, cloro total y conductividad). El Excel no indica qué equipos hay entre esos puntos. El indicador clave es el <b>cloro libre</b> en el tanque y la salida (referencia 0,2–1,0 mg/L). Cada tarjeta resume el último dato de un punto; la tabla de abajo muestra todos los días.',
 };

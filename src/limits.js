@@ -9,8 +9,11 @@ export const REF_DEFAULTS = [
   { id: 'edari-ph-perm', inst: 'EDARI', param: 'pH', points: ['Permeado'], min: 6, max: 9, unit: '', note: 'Rango habitual de vertido del efluente tratado.' },
   { id: 'potable-cl', inst: 'Agua potable', param: 'Cloro libre', points: ['Tanque "P"', 'Salida "P"'], min: 0.2, max: 1, unit: 'mg/L', note: 'Cloro libre residual habitual en agua de consumo (mínimo 0,2, máximo 1,0 mg/L).' },
   { id: 'potable-ce', inst: 'Agua potable', param: 'Conductividad', points: '*', min: null, max: 2500, unit: 'µS/cm', note: 'Valor paramétrico de agua de consumo (RD 3/2023).' },
-  { id: 'torres-ph', inst: 'Torres', param: 'pH', points: '*', min: 6.5, max: 9, unit: '', note: 'Control de torres de refrigeración (RD 487/2022).' },
-  { id: 'torres-turb', inst: 'Torres', param: 'Turbidez', points: '*', min: null, max: 15, unit: 'NTU', note: 'Control de torres de refrigeración (RD 487/2022).' },
+  // Torres: «Programa de mantenimiento químico en circuitos · Parámetros calidad del agua 2025» (límites recomendados).
+  { id: 'torres-ph', inst: 'Torres', param: 'pH', points: '*', min: 6.5, max: 9, unit: '', note: 'Programa de mantenimiento químico 2025: pH 6,5–9.' },
+  { id: 'torres-cond', inst: 'Torres', param: 'Conductividad', points: '*', min: null, max: 4000, unit: 'µS/cm', note: 'Programa de mantenimiento químico 2025: conductividad < 4000 µS/cm.' },
+  { id: 'torres-turb', inst: 'Torres', param: 'Turbidez', points: '*', min: null, max: 15, unit: 'NTU', note: 'Programa de mantenimiento químico 2025: turbidez < 15 NTU.' },
+  { id: 'torres-biocida', inst: 'Torres', param: 'Biocida', points: '*', min: 0.5, max: null, unit: 'ppm', note: 'Programa de mantenimiento químico 2025: Ferrocid 4601, concentración mínima 0,50 ppm (medición con fotómetro de cloro).' },
   { id: 'fru-ph', inst: 'Fructalys', param: 'pH', points: '*', min: 5.5, max: 9.5, unit: '', note: 'Rango típico de ordenanza de vertido. Ajústalo a la autorización de Fructalys.' },
   { id: 'fru-t', inst: 'Fructalys', param: 'Temperatura', points: '*', min: null, max: 40, unit: '°C', note: 'Temperatura máxima típica de ordenanza de vertido.' },
 ];
